@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuthStore } from '@/store/authStore';
@@ -39,8 +40,8 @@ const DashboardSidebar = ({ className = '' }: DashboardSidebarProps) => {
     { icon: FiHome, label: t('dashboard') || 'Dashboard', href: '/dashboard' },
     { icon: FiUser, label: t('myProfile'), href: '/dashboard/profile' },
     { icon: FiPackage, label: t('myOrder'), href: '/dashboard/orders' },
-    { icon: FiStar, label: t('reviews') || 'Reviews & Feedback', href: '/dashboard/reviews' },
-    { icon: FiTag, label: t('coupons') || 'Coupons & Offers', href: '/dashboard/coupons' },
+    { icon: FiStar, label: 'reviews', href: '/dashboard/reviews' },
+    { icon: FiTag, label: 'coupons', href: '/dashboard/coupons' },
     { icon: FiMessageSquare, label: t('chat'), href: '/dashboard/chat' },
     { icon: FiCreditCard, label: t('paymentMethod'), href: '/dashboard/payment-method' },
   ];
@@ -65,7 +66,16 @@ const DashboardSidebar = ({ className = '' }: DashboardSidebarProps) => {
       <div className="p-6 sm:p-8 flex flex-col items-center border-b border-gray-100 dark:border-gray-700">
         <div className="relative group">
           <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-4 border-[#0F7BA0]/20 shadow-lg overflow-hidden bg-linear-to-br from-[#0F2744] to-[#0F7BA0]">
-            {user?.name ? (
+            {user?.profileImage ? (
+              <Image
+                src={user.profileImage}
+                alt={user.name || 'Profile'}
+                width={112}
+                height={112}
+                className="w-full h-full object-cover"
+                unoptimized
+              />
+            ) : user?.name ? (
               <div className="w-full h-full flex items-center justify-center">
                 <span className="text-2xl sm:text-3xl font-bold text-white">
                   {user.name.split(' ').map(n => n.charAt(0)).join('').toUpperCase().slice(0, 2)}

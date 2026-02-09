@@ -41,6 +41,7 @@ const AdminSidebar = ({ isOpen, onClose }: AdminSidebarProps) => {
     { icon: FiShoppingBag, label: 'Orders', href: '/admin/orders' },
     { icon: FiUsers, label: 'Users', href: '/admin/users' },
     { icon: FiPackage, label: 'Services', href: '/admin/services' },
+    { icon: FiMapPin, label: 'Stores', href: '/admin/stores' },
     { icon: FiTruck, label: 'Delivery', href: '/admin/delivery' },
     { icon: FiDollarSign, label: 'Payments', href: '/admin/payments' },
     { icon: FiTag, label: 'Coupons', href: '/admin/coupons' },

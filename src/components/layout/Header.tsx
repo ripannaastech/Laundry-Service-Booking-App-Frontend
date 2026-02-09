@@ -20,6 +20,7 @@ const Header = () => {
   const navItems = [
     { label: t('home'), href: '/' },
     { label: t('services'), href: '/services' },
+    { label: 'Stores', href: '/stores' },
     { label: t('aboutUs'), href: '/about' },
     { label: t('contactUs'), href: '/contact' },
   ];
@@ -125,7 +126,6 @@ const Header = () => {
                       {getUserInitials()}
                     </div>
                   )}
-                  <span className="hidden lg:block">{user.name}</span>
                   <svg
                     className={`w-4 h-4 transition-transform duration-300 ${isProfileOpen ? 'rotate-180' : ''}`}
                     fill="none"

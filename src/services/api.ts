@@ -27,10 +27,15 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Unauthorized - clear token and redirect to login
+    // Don't clear auth or redirect for auth endpoints (login, register, google, etc.)
+    const requestUrl = error.config?.url || '';
+    const isAuthEndpoint = requestUrl.includes('/auth/');
+    
+    if (error.response?.status === 401 && !isAuthEndpoint) {
+      // Unauthorized on a protected endpoint - clear token and redirect to login
       localStorage.removeItem('auth_token');
       localStorage.removeItem('auth_user');
+      localStorage.removeItem('auth-storage');
       window.location.href = '/login';
     }
     return Promise.reject(error);

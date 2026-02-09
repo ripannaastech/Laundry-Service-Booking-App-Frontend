@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import DashboardLayout from '@/components/dashboard/DashboardLayout';
-import { FiCamera, FiUser, FiMail, FiPhone, FiEdit3, FiSave, FiX, FiCheck } from 'react-icons/fi';
+import { FiCamera, FiUser, FiMail, FiPhone, FiEdit3, FiSave, FiX, FiCheck, FiLoader } from 'react-icons/fi';
 import { useAuthStore } from '@/store/authStore';
 import api from '@/services/api';
+import { uploadImage, validateImageFile } from '@/services/imageUpload';
 
 interface UserProfile {
   name: string;
@@ -33,6 +34,9 @@ const ProfilePage = () => {
   });
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'success' | 'error'>('success');
 
@@ -104,28 +108,69 @@ const ProfilePage = () => {
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Validate file
+      const validation = validateImageFile(file, 5);
+      if (!validation.isValid) {
+        setImageError(validation.error || 'Invalid file');
+        return;
+      }
+      setImageError(null);
+      setSelectedFile(file);
       const imageUrl = URL.createObjectURL(file);
       setSelectedImage(imageUrl);
     }
   };
 
-  const handleImageUpload = () => {
-    if (selectedImage) {
-      setEditProfile(prev => ({ ...prev, profileImage: selectedImage }));
-      setProfile(prev => ({ ...prev, profileImage: selectedImage }));
+  const handleImageUpload = async () => {
+    if (!selectedFile) return;
+    
+    setIsUploadingImage(true);
+    setImageError(null);
+    
+    try {
+      // Upload to ImgBB
+      const uploadedUrl = await uploadImage(selectedFile);
+      
+      console.log('✅ Image uploaded to ImgBB:', uploadedUrl);
+      
+      // Update profile with the uploaded URL
+      setEditProfile(prev => ({ ...prev, profileImage: uploadedUrl }));
+      setProfile(prev => ({ ...prev, profileImage: uploadedUrl }));
       setShowImageModal(false);
       setSelectedImage(null);
+      setSelectedFile(null);
+      
+      setMessage('Image uploaded! Click "Save Changes" to save to your profile.');
+      setMessageType('success');
+      setTimeout(() => setMessage(''), 5000);
+    } catch (error) {
+      console.error('Image upload failed:', error);
+      setImageError('Failed to upload image. Please try again.');
+    } finally {
+      setIsUploadingImage(false);
     }
   };
 
   const handleUpdate = async () => {
     setIsLoading(true);
     setMessage('');
+    
+    // Log the data being sent
+    console.log('📤 Sending profile update:', {
+      name: editProfile.name,
+      phone: editProfile.phone,
+      profileImage: editProfile.profileImage,
+    });
+    
     try {
+      // Send profileImage URL along with name and phone
       const response = await api.put('/auth/profile', {
         name: editProfile.name,
         phone: editProfile.phone,
+        profileImage: editProfile.profileImage, // Include the ImgBB URL
       });
+
+      console.log('📥 API Response:', response.data);
 
       if (response.data.status === 'success') {
         const updatedData = response.data.data;
@@ -133,18 +178,19 @@ const ProfilePage = () => {
           name: updatedData.name || editProfile.name,
           email: updatedData.email || editProfile.email,
           phone: updatedData.phone || editProfile.phone,
-          profileImage: editProfile.profileImage,
+          profileImage: updatedData.profileImage || editProfile.profileImage,
         };
         setProfile(updatedProfile);
         setEditProfile(updatedProfile);
 
-        // Update local store
+        // Update local store with profileImage
         const currentUser = useAuthStore.getState().user;
         if (currentUser) {
           const updatedUser = {
             ...currentUser,
             name: updatedProfile.name,
             phone: updatedProfile.phone,
+            profileImage: updatedProfile.profileImage, // Include profile image URL
           };
           localStorage.setItem('auth_user', JSON.stringify(updatedUser));
           useAuthStore.setState({ user: updatedUser });
@@ -268,9 +314,6 @@ const ProfilePage = () => {
                   <FiCamera className="w-4 h-4 sm:w-5 sm:h-5" />
                 </button>
               )}
-              <p className="text-center mt-3 text-sm text-gray-500 dark:text-gray-400">
-                {profile.email}
-              </p>
             </div>
           </div>
 
@@ -361,7 +404,7 @@ const ProfilePage = () => {
         <>
           <div 
             className="fixed inset-0 bg-black/50 z-9998 animate-fade-in"
-            onClick={() => setShowImageModal(false)}
+            onClick={() => !isUploadingImage && setShowImageModal(false)}
           />
           <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-9999 w-[90vw] max-w-md animate-scale-in">
             <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-2xl">
@@ -377,7 +420,10 @@ const ProfilePage = () => {
                     </div>
                     <input type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
                   </label>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Click to select an image</p>
+                  {imageError && (
+                    <p className="text-sm text-red-500 mb-4">{imageError}</p>
+                  )}
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Click to select an image (max 5MB)</p>
                   <button
                     onClick={() => setShowImageModal(false)}
                     className="px-6 py-2.5 border-2 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -388,7 +434,7 @@ const ProfilePage = () => {
               ) : (
                 <div className="text-center">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Confirm Photo</h3>
-                  <div className="w-40 h-40 mx-auto mb-6 rounded-full overflow-hidden border-4 border-[#0F7BA0]/30">
+                  <div className="w-40 h-40 mx-auto mb-4 rounded-full overflow-hidden border-4 border-[#0F7BA0]/30">
                     <Image
                       src={selectedImage}
                       alt="Preview"
@@ -398,21 +444,35 @@ const ProfilePage = () => {
                       unoptimized
                     />
                   </div>
+                  {imageError && (
+                    <p className="text-sm text-red-500 mb-4">{imageError}</p>
+                  )}
                   <div className="flex gap-3">
                     <button
                       onClick={() => {
                         setSelectedImage(null);
+                        setSelectedFile(null);
+                        setImageError(null);
                         setShowImageModal(false);
                       }}
-                      className="flex-1 px-6 py-2.5 border-2 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      disabled={isUploadingImage}
+                      className="flex-1 px-6 py-2.5 border-2 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleImageUpload}
-                      className="flex-1 px-6 py-2.5 bg-[#0F2744] dark:bg-[#0F7BA0] text-white rounded-lg font-medium hover:bg-[#1a3a5c] dark:hover:bg-[#0d6a8a] transition-colors"
+                      disabled={isUploadingImage}
+                      className="flex-1 px-6 py-2.5 bg-[#0F2744] dark:bg-[#0F7BA0] text-white rounded-lg font-medium hover:bg-[#1a3a5c] dark:hover:bg-[#0d6a8a] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      Confirm
+                      {isUploadingImage ? (
+                        <>
+                          <FiLoader className="w-4 h-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        'Confirm'
+                      )}
                     </button>
                   </div>
                 </div>

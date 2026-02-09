@@ -119,7 +119,51 @@ const ServiceDetailPage = () => {
   const handleAddToCart = () => {
     const cartItems = getCartItems();
     if (cartItems.length > 0) {
-      // Store service info along with cart items for order creation
+      // Load existing cart groups from localStorage
+      const existingGroupsStr = localStorage.getItem('cartGroups');
+      let cartGroups: { serviceType: string; serviceId: string; items: CartItem[] }[] = [];
+      
+      if (existingGroupsStr) {
+        try {
+          cartGroups = JSON.parse(existingGroupsStr);
+        } catch {
+          cartGroups = [];
+        }
+      }
+      
+      // Check if this service already exists in cart
+      const existingGroupIndex = cartGroups.findIndex(
+        (g) => g.serviceId === service._id
+      );
+      
+      if (existingGroupIndex !== -1) {
+        // Merge items into existing group
+        const existingGroup = cartGroups[existingGroupIndex];
+        cartItems.forEach((newItem) => {
+          const existingItemIndex = existingGroup.items.findIndex(
+            (item) => item.id === newItem.id
+          );
+          if (existingItemIndex !== -1) {
+            // Item already exists - add quantity
+            existingGroup.items[existingItemIndex].quantity += newItem.quantity;
+          } else {
+            // New item - add to group
+            existingGroup.items.push(newItem);
+          }
+        });
+      } else {
+        // New service group - add to cart
+        cartGroups.push({
+          serviceType: service.name,
+          serviceId: service._id,
+          items: cartItems,
+        });
+      }
+      
+      // Save merged cart groups
+      localStorage.setItem('cartGroups', JSON.stringify(cartGroups));
+      
+      // Also keep legacy keys for backward compatibility
       localStorage.setItem('cartItems', JSON.stringify(cartItems));
       localStorage.setItem('serviceType', service.name);
       localStorage.setItem('serviceId', service._id);

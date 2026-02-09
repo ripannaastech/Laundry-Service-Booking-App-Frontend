@@ -121,30 +121,26 @@ export const useAuthStore = create<AuthState>()(
       },
 
       // Google login - Uses Firebase to get idToken, then sends to backend API
+      // Must get a REAL JWT token from backend (same as email/password login)
       googleLogin: async () => {
         set({ isLoading: true, error: null });
         try {
-          console.log('📤 Starting Google Sign-In...');
-          
           // Step 1: Sign in with Google using Firebase popup
           const result = await signInWithPopup(auth, googleProvider);
-          console.log('✅ Google Sign-In Popup Success:', result.user.email);
           
           // Step 2: Get Firebase ID Token
           const idToken = await result.user.getIdToken();
-          console.log('✅ Firebase ID Token obtained');
           
-          // Step 3: Send to backend - handles both new and existing users
+          // Step 3: Send idToken to backend - get real JWT token back
           let loginSuccess = false;
           
+          // Try /auth/google endpoint
           try {
             const response = await api.post('/auth/google', { idToken });
-            console.log('📦 Backend Response:', response.data);
             
             if (response.data.status === 'success' && response.data.token && response.data.user) {
               const { token, user } = response.data;
               
-              // Save to localStorage
               localStorage.setItem('auth_token', token);
               localStorage.setItem('auth_user', JSON.stringify(user));
               
@@ -157,48 +153,50 @@ export const useAuthStore = create<AuthState>()(
               });
               
               loginSuccess = true;
-              console.log('✅ Backend login successful! User:', user.email);
-              console.log('📦 Verify localStorage:', {
-                token: !!localStorage.getItem('auth_token'),
-                user: !!localStorage.getItem('auth_user')
-              });
             }
           } catch (apiErr) {
-            console.log('⚠️ Backend API failed:', (apiErr as any)?.response?.data || (apiErr as any)?.message);
+            console.log('Primary /auth/google failed, trying firebase-login...');
           }
           
-          // Step 4: If backend failed, use Firebase user data directly
+          // Fallback: try /auth/firebase-login endpoint with user info
           if (!loginSuccess) {
-            console.log('📝 Using Firebase user data as fallback...');
-            
-            const googleUser = {
-              id: result.user.uid,
-              name: result.user.displayName || 'Google User',
-              email: result.user.email || '',
-              phone: result.user.phoneNumber || undefined,
-              profileImage: result.user.photoURL || null,
-              role: 'user' as string,
-            };
-            
-            const tempToken = `google_${result.user.uid}_${Date.now()}`;
-            
-            // Save to localStorage
-            localStorage.setItem('auth_token', tempToken);
-            localStorage.setItem('auth_user', JSON.stringify(googleUser));
-            
-            set({
-              user: googleUser,
-              token: tempToken,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null,
-            });
-            
-            console.log('✅ Fallback login successful! User:', googleUser.email);
-            console.log('📦 Verify localStorage:', {
-              token: !!localStorage.getItem('auth_token'),
-              user: !!localStorage.getItem('auth_user')
-            });
+            try {
+              const response = await api.post('/auth/firebase-login', {
+                uid: result.user.uid,
+                email: result.user.email,
+                phoneNumber: result.user.phoneNumber,
+                displayName: result.user.displayName,
+                photoURL: result.user.photoURL,
+              });
+              
+              const data = response.data;
+              // Handle both { status: 'success', token, user } and { success: true, token, user }
+              const token = data.token;
+              const user = data.user;
+              
+              if (token && user) {
+                localStorage.setItem('auth_token', token);
+                localStorage.setItem('auth_user', JSON.stringify(user));
+                
+                set({
+                  user,
+                  token,
+                  isAuthenticated: true,
+                  isLoading: false,
+                  error: null,
+                });
+                
+                loginSuccess = true;
+              }
+            } catch (apiErr2) {
+              console.log('Fallback /auth/firebase-login also failed');
+            }
+          }
+          
+          // If BOTH backend endpoints failed, do NOT use fake token - throw error
+          if (!loginSuccess) {
+            set({ isLoading: false, error: 'Google login failed. Backend authentication failed.' });
+            throw new Error('Google login failed. Could not authenticate with backend.');
           }
           
         } catch (error: unknown) {

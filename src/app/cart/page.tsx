@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Header, Footer } from '@/components/layout';
@@ -16,6 +16,7 @@ interface CartItem {
 
 interface CartGroup {
   serviceType: string;
+  serviceId?: string;
   items: CartItem[];
 }
 
@@ -26,17 +27,34 @@ const CartPage = () => {
   const initializeCart = () => {
     if (typeof window === 'undefined') return [];
     
+    // Try new cartGroups format first
+    const savedGroups = localStorage.getItem('cartGroups');
+    if (savedGroups) {
+      try {
+        const groups = JSON.parse(savedGroups);
+        if (Array.isArray(groups) && groups.length > 0) {
+          return groups.map((g: { serviceType: string; serviceId?: string; items: CartItem[] }) => ({
+            serviceType: g.serviceType,
+            serviceId: g.serviceId || '',
+            items: g.items,
+          }));
+        }
+      } catch {
+        // fall through to legacy format
+      }
+    }
+    
+    // Fallback: legacy single-group format
     const savedItems = localStorage.getItem('cartItems');
     const serviceType = localStorage.getItem('serviceType') || 'Wash & Fold';
+    const serviceId = localStorage.getItem('serviceId') || '';
     
     if (savedItems) {
       const items: CartItem[] = JSON.parse(savedItems);
-      return [
-        {
-          serviceType,
-          items,
-        },
-      ];
+      const groups = [{ serviceType, serviceId, items }];
+      // Migrate to new format
+      localStorage.setItem('cartGroups', JSON.stringify(groups));
+      return groups;
     }
     return [];
   };
@@ -45,6 +63,18 @@ const CartPage = () => {
   const [couponCode, setCouponCode] = useState('');
   const [discount, setDiscount] = useState(0);
   const [appliedCoupon, setAppliedCoupon] = useState('');
+
+  // Sync cart to localStorage whenever it changes
+  useEffect(() => {
+    if (cartGroups.length > 0) {
+      localStorage.setItem('cartGroups', JSON.stringify(cartGroups));
+    } else {
+      localStorage.removeItem('cartGroups');
+      localStorage.removeItem('cartItems');
+      localStorage.removeItem('serviceType');
+      localStorage.removeItem('serviceId');
+    }
+  }, [cartGroups]);
   
   // Initialize selections
   const initializeSelections = () => {
@@ -311,7 +341,7 @@ const CartPage = () => {
                     {/* Add More Items */}
                     <div className="p-4 sm:p-5 border-t border-gray-100">
                       <Link
-                        href={`/services/wash-fold`}
+                        href="/services"
                         className="flex items-center justify-center gap-2 w-full py-2.5 sm:py-3 border-2 border-dashed border-gray-200 rounded-lg text-[#5a6a7a] text-xs sm:text-sm font-medium hover:border-[#0F7BA0] hover:text-[#0F7BA0] transition-colors"
                       >
                         <FiPlus className="w-4 h-4" />
